@@ -22,8 +22,9 @@ function consumer
     while (1)
         data = str2double(char(zmq_recv(rx)));
         if (mod(data, 2) == 0)
-            result = sprintf('%d %d', id, data);
-            zmq_send(tx, uint8(result));
+            result = data^2; % eval request
+            message = sprintf('%d %d', id, result);
+            zmq_send(tx, uint8(message));
         end
     end
 end
