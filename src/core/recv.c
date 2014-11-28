@@ -5,11 +5,13 @@
 #include <zmq.h>
 #include <string.h>
 
+#define INTERNAL_ABORT_CODE -100
 #define DEFAULT_BUFFER_LENGTH 255
 
 int configure_flag(const mxArray **, int);
 void configure_return(int, mxArray **, int, size_t, void *);
 size_t configure_buffer_length(const mxArray **, int *);
+int recv_with_length(void *, void **, size_t, int);
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
@@ -42,16 +44,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
 
-    /* Create buffer and call API */
-    buffer = (uint8_t*) mxCalloc(bufLen, sizeof(uint8_t));
-    if (buffer == NULL) {
-        mexErrMsgIdAndTxt("util:calloc", "Error: Unsuccessful memory allocation.");
+    coreAPIReturn = recv_with_length(socket, &buffer, bufLen, coreAPIOptionFlag);
+
+    if (coreAPIReturn == INTERNAL_ABORT_CODE) {
         return;
-    }
-
-    coreAPIReturn = zmq_recv(socket, buffer, bufLen * sizeof(uint8_t), coreAPIOptionFlag);
-
-    if (coreAPIReturn < 0) {
+    } else if (coreAPIReturn < 0) {
         handle_error();
     } else {
         /* Prepare the values that should be returned to MATLAB */
@@ -59,6 +56,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
 
     mxFree(buffer);
+}
+
+int recv_with_length(void *socket, void **buffer, size_t bufLen, int coreAPIOptionFlag)
+{
+    int coreAPIReturn = -1;
+
+    /* Create buffer and call API */
+    *buffer = (uint8_t*) mxCalloc(bufLen, sizeof(uint8_t));
+    if (*buffer == NULL) {
+        mexErrMsgIdAndTxt("util:calloc", "Error: Unsuccessful memory allocation.");
+        return INTERNAL_ABORT_CODE;
+    }
+
+    coreAPIReturn = zmq_recv(socket, *buffer, bufLen * sizeof(uint8_t), coreAPIOptionFlag);
+
+    return coreAPIReturn;
 }
 
 /* Discover which options are passed by the user, and calculate the
