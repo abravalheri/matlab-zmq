@@ -6,18 +6,18 @@
 #include <string.h>
 
 #define INTERNAL_ABORT_CODE -100
-#define DEFAULT_BUFFER_LENGTH 255
 
 int configure_flag(const mxArray **, int);
 void configure_return(int, mxArray **, int, size_t, void *);
 size_t configure_buffer_length(const mxArray **, int *);
 int recv_with_length(void *, void **, size_t, int);
+int recv_without_length(void *, void **, int);
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     void *socket = NULL;
     void *buffer = NULL;
-    size_t bufLen = DEFAULT_BUFFER_LENGTH;
+    size_t bufLen = 0;
     int optionStart = 1;  /* from which index options can be passed */
     int coreAPIReturn, coreAPIOptionFlag = 0;
 
@@ -31,8 +31,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         /* Check if the user has chosen a bufLen,
          * if so get it and update the index where options should start */
         bufLen = configure_buffer_length(prhs, &optionStart);
-        if (bufLen == 0)
-            return;
 
         /* Get the options for receiving */
         coreAPIOptionFlag = configure_flag(&(prhs[optionStart]), nrhs - optionStart);
@@ -44,7 +42,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
 
-    coreAPIReturn = recv_with_length(socket, &buffer, bufLen, coreAPIOptionFlag);
+    if (bufLen > 0) {
+        coreAPIReturn = recv_with_length(socket, &buffer, bufLen, coreAPIOptionFlag);
+    } else {
+        coreAPIReturn = recv_without_length(socket, &buffer, coreAPIOptionFlag);
+    }
 
     if (coreAPIReturn == INTERNAL_ABORT_CODE) {
         return;
@@ -55,7 +57,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         configure_return(nlhs, plhs, coreAPIReturn, bufLen, buffer);
     }
 
-    mxFree(buffer);
+    if (buffer != NULL)
+        mxFree(buffer);
 }
 
 int recv_with_length(void *socket, void **buffer, size_t bufLen, int coreAPIOptionFlag)
@@ -70,6 +73,42 @@ int recv_with_length(void *socket, void **buffer, size_t bufLen, int coreAPIOpti
     }
 
     coreAPIReturn = zmq_recv(socket, *buffer, bufLen * sizeof(uint8_t), coreAPIOptionFlag);
+
+    return coreAPIReturn;
+}
+
+int recv_without_length(void *socket, void **buffer, int coreAPIOptionFlag)
+{
+    size_t bufLen;
+    int coreAPIReturn = -1;
+    zmq_msg_t message;
+
+    coreAPIReturn = zmq_msg_init(&message);
+    if (coreAPIReturn < 0)
+        return coreAPIReturn;
+
+
+    /* Call API and receive message */
+    coreAPIReturn = zmq_msg_recv(socket, &message, coreAPIOptionFlag);
+
+    if (coreAPIReturn >= 0) {
+        bufLen = zmq_msg_size(&message);
+
+
+        if (bufLen > 0) {
+            /* Create buffer */
+            *buffer = (uint8_t*) mxCalloc(bufLen, sizeof(uint8_t));
+
+            if (*buffer == NULL) {
+                mexErrMsgIdAndTxt("util:calloc", "Error: Unsuccessful memory allocation.");
+                coreAPIReturn = INTERNAL_ABORT_CODE;
+            } else {
+                memcpy(*buffer, zmq_msg_data(&message), bufLen);
+            }
+        }
+    }
+    
+    zmq_msg_close(&message);
 
     return coreAPIReturn;
 }
@@ -116,7 +155,7 @@ void configure_return(int nlhs, mxArray **plhs, int msgLen, size_t bufLen, void 
  * if so, convert it from MATLAB and increments the index */
 size_t configure_buffer_length(const mxArray **param, int *paramIndex)
 {
-    size_t length = DEFAULT_BUFFER_LENGTH;
+    size_t length = 0;
     size_t *input;
 
     if (mxIsNumeric(param[*paramIndex])) {
