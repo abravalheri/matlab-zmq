@@ -11,7 +11,7 @@ int configure_flag(const mxArray **, int);
 void configure_return(int, mxArray **, int, size_t, void *);
 size_t configure_buffer_length(const mxArray **, int *);
 int recv_with_length(void *, void **, size_t, int);
-int recv_without_length(void *, void **, int);
+int recv_without_length(void *, void **, size_t *, int);
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
@@ -45,7 +45,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (bufLen > 0) {
         coreAPIReturn = recv_with_length(socket, &buffer, bufLen, coreAPIOptionFlag);
     } else {
-        coreAPIReturn = recv_without_length(socket, &buffer, coreAPIOptionFlag);
+        coreAPIReturn = recv_without_length(socket, &buffer, &bufLen, coreAPIOptionFlag);
     }
 
     if (coreAPIReturn == INTERNAL_ABORT_CODE) {
@@ -77,9 +77,8 @@ int recv_with_length(void *socket, void **buffer, size_t bufLen, int coreAPIOpti
     return coreAPIReturn;
 }
 
-int recv_without_length(void *socket, void **buffer, int coreAPIOptionFlag)
+int recv_without_length(void *socket, void **buffer, size_t * bufLen, int coreAPIOptionFlag)
 {
-    size_t bufLen;
     int coreAPIReturn = -1;
     zmq_msg_t message;
 
@@ -89,25 +88,24 @@ int recv_without_length(void *socket, void **buffer, int coreAPIOptionFlag)
 
 
     /* Call API and receive message */
-    coreAPIReturn = zmq_msg_recv(socket, &message, coreAPIOptionFlag);
+    coreAPIReturn = zmq_msg_recv(&message, socket, coreAPIOptionFlag);
 
     if (coreAPIReturn >= 0) {
-        bufLen = zmq_msg_size(&message);
+        *bufLen = zmq_msg_size(&message);
 
-
-        if (bufLen > 0) {
+        if (*bufLen > 0) {
             /* Create buffer */
-            *buffer = (uint8_t*) mxCalloc(bufLen, sizeof(uint8_t));
+            *buffer = (uint8_t*) mxCalloc(*bufLen, sizeof(uint8_t));
 
             if (*buffer == NULL) {
                 mexErrMsgIdAndTxt("util:calloc", "Error: Unsuccessful memory allocation.");
                 coreAPIReturn = INTERNAL_ABORT_CODE;
             } else {
-                memcpy(*buffer, zmq_msg_data(&message), bufLen);
+                memcpy(*buffer, zmq_msg_data(&message), *bufLen);
             }
         }
     }
-    
+
     zmq_msg_close(&message);
 
     return coreAPIReturn;

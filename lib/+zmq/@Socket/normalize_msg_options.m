@@ -1,5 +1,5 @@
 function [buffLen, options] = normalize_msg_options(obj, varargin)
-    buffLen = obj.defaultBufferLength;
+    buffLen = -1;
     options = cell(0);
     if (nargin > 1)
         if (isnumeric(varargin{1}))

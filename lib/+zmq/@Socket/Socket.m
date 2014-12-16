@@ -7,7 +7,6 @@ classdef Socket < handle
     properties (Access = public)
         bindings;
         connections;
-        defaultBufferLength;
     end
 
     methods
@@ -18,7 +17,6 @@ classdef Socket < handle
             % Init properties
             obj.bindings = {};
             obj.connections = {};
-            obj.defaultBufferLength = 255;
         end
 
         function delete(obj)

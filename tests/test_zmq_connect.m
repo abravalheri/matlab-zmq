@@ -1,7 +1,7 @@
 function test_zmq_connect
     [ctx, socket] = setup;
     cleanupObj = onCleanup(@() teardown(ctx, socket));
-    
+
     %% connecting
     assert_throw('EPROTONOSUPPORT', @zmq.core.connect, socket, 'abc://localhost'); % invalid transport
     assert_throw('EINVAL', @zmq.core.connect, socket, 'tcp://localhost');          % port must specified

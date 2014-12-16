@@ -4,6 +4,8 @@ function test_socket_send_recv_multipart
         {@() clear('client', 'server'), @() teardown(ctx)}, ...
         'UniformOutput', false));
 
+    buffLen = 50;
+
     %% client test - request send
     msgSent = uint8('request');
     client.send(msgSent, 'sndmore');
@@ -18,9 +20,24 @@ function test_socket_send_recv_multipart
     assert(rc == 0, 'rcvmore option should be 0, after receive all parts in a multipart message');
 
     %% -------- multipart methods ----------------------------------------------
+    % using limited buffer
     original = uint8(text_fixture('wikipedia.html'));
-    assert_does_not_throw(@server.send_multipart, original);  % server send
-    received = assert_does_not_throw(@client.recv_multipart); % client recv
+    assert_does_not_throw(@server.send_multipart, original, buffLen);  % server send
+    received = assert_does_not_throw(@client.recv_multipart, buffLen); % client recv
+    assert(strcmp(char(received), char(original)),...
+        ['multipart messages should be transmitted without errors,'...
+         ' but received differs from original']);
+    clear original received;
+
+    % using buffer just for send
+    original = uint8(text_fixture('utf8-short.txt'));
+    assert_does_not_throw(@client.send_multipart, original, buffLen);  % client send
+    keyboard
+    try
+        received = server.recv_multipart; % server recv assert_does_not_throw(@
+    catch e
+        keyboard
+    end
     assert(strcmp(char(received), char(original)),...
         ['multipart messages should be transmitted without errors,'...
          ' but received differs from original']);
